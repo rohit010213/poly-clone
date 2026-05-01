@@ -1,476 +1,240 @@
-// executor.js — Polymarket CLOB V2 (fully corrected)
+// executor.js — Uses official @polymarket/clob-client-v2 SDK
+// npm install @polymarket/clob-client-v2 viem
+
 const { ethers } = require('ethers');
 const axios = require('axios');
-const crypto = require('crypto');
 
 const CLOB_BASE = process.env.CLOB_API_URL || 'https://clob.polymarket.com';
+const PUSD_ADDRESS = '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB';
+const CTF_CONTRACT = '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045';
 
-// ─── V2 CONTRACT ADDRESSES ────────────────────────────────────────────────────
-const CTF_EXCHANGE_V2 = ethers.getAddress('0xE111180000d2663C0091e4f400237545B87B996B');
-const CTF_NEG_RISK_EXCHANGE_V2 = ethers.getAddress('0xe2222d279d744050d28e00520010520000310F59');
-const CTF_CONTRACT = ethers.getAddress('0x4D97DCd97eC945f40cF65F87097ACe5EA0476045');
-const PUSD_ADDRESS = ethers.getAddress('0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB');
+let provider, ethersWallet, clobClient;
 
-const ZERO_BYTES32 = ethers.ZeroHash;
-
-let provider, wallet;
+// SDK refs (ESM — dynamic import)
+let ClobClient, Side, OrderType, Chain;
+let createWalletClient, http, privateKeyToAccount;
 
 // ─────────────────────────────────────────
-// INIT
+// LOAD ESM SDK
 // ─────────────────────────────────────────
 
-function initWallet() {
+async function loadSDK() {
+  if (ClobClient) return;
+  const sdk = await import('@polymarket/clob-client-v2');
+  ClobClient = sdk.ClobClient;
+  Side = sdk.Side;
+  OrderType = sdk.OrderType;
+  Chain = sdk.Chain;
+
+  const viem = await import('viem');
+  const accs = await import('viem/accounts');
+  createWalletClient = viem.createWalletClient;
+  http = viem.http;
+  privateKeyToAccount = accs.privateKeyToAccount;
+}
+
+// ─────────────────────────────────────────
+// WALLET + SDK INIT
+// ─────────────────────────────────────────
+
+async function initWallet() {
   if (!process.env.PRIVATE_KEY) {
-    console.warn('[EXECUTOR] No PRIVATE_KEY set — auto-execute disabled');
+    console.warn('[EXECUTOR] No PRIVATE_KEY — auto-execute disabled');
     return false;
   }
-  provider = new ethers.JsonRpcProvider(
-    process.env.POLYGON_RPC || 'https://polygon-rpc.com',
-    137
-  );
-  wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
-  console.log(`[EXECUTOR] Wallet loaded: ${wallet.address}`);
+
+  await loadSDK();
+
+  provider = new ethers.JsonRpcProvider(process.env.POLYGON_RPC || 'https://polygon-rpc.com', 137);
+  ethersWallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+  console.log(`[EXECUTOR] Wallet: ${ethersWallet.address}`);
+
+  const pk = process.env.PRIVATE_KEY.startsWith('0x') ? process.env.PRIVATE_KEY : '0x' + process.env.PRIVATE_KEY;
+  const account = privateKeyToAccount(pk);
+  const signer = createWalletClient({ account, transport: http() });
+
+  const sdkConfig = {
+    host: CLOB_BASE,
+    chain: Chain.POLYGON,
+    signer,
+    signatureType: parseInt(process.env.POLY_SIGNATURE_TYPE || '0'),
+  };
+
+  if (process.env.POLY_FUNDER_ADDRESS) {
+    sdkConfig.funderAddress = process.env.POLY_FUNDER_ADDRESS;
+  }
+
+  const apiKey = process.env.POLY_API_KEY;
+  const secret = process.env.POLY_API_SECRET;
+  const pass = process.env.POLY_API_PASSPHRASE;
+
+  if (apiKey && secret && pass) {
+    sdkConfig.creds = { key: apiKey, secret, passphrase: pass };
+    console.log('[EXECUTOR] API credentials loaded ✓');
+  } else {
+    console.warn('[EXECUTOR] No API creds — run generateApiKey() once first');
+  }
+
+  clobClient = new ClobClient(sdkConfig);
+  console.log('[EXECUTOR] ClobClient ready');
   return true;
 }
 
 // ─────────────────────────────────────────
-// L2 AUTH HEADERS — HMAC-SHA256
-// ✅ Headers use underscore (POLY_ADDRESS, not POLY-ADDRESS)
-// ✅ Secret is base64 decoded before use as HMAC key
-// ─────────────────────────────────────────
-
-async function buildClobAuthHeaders(method, path, body = '') {
-  const apiKey = process.env.POLY_API_KEY;
-  const secret = process.env.POLY_API_SECRET;
-  const passphrase = process.env.POLY_API_PASSPHRASE;
-
-  if (!apiKey || !secret || !passphrase) {
-    throw new Error('[EXECUTOR] Missing POLY_API_KEY / POLY_API_SECRET / POLY_API_PASSPHRASE in .env');
-  }
-  if (!wallet) throw new Error('[EXECUTOR] Wallet not initialized');
-
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const message = timestamp + method.toUpperCase() + path + (body || '');
-
-  // ✅ base64 decode the secret — this is the correct key format
-  const signature = crypto
-    .createHmac('sha256', Buffer.from(secret, 'base64'))
-    .update(message)
-    .digest('base64');
-
-  return {
-    'Content-Type': 'application/json',
-    'POLY_ADDRESS': wallet.address,   // ✅ underscore, not hyphen
-    'POLY_SIGNATURE': signature,
-    'POLY_TIMESTAMP': timestamp,
-    'POLY_API_KEY': apiKey,
-    'POLY_PASSPHRASE': passphrase,
-  };
-}
-
-// ─────────────────────────────────────────
-// ONE-TIME: GENERATE API KEY (EIP-712 L1)
+// GENERATE / DERIVE API KEY
 // ─────────────────────────────────────────
 
 async function generateApiKey() {
-  if (!wallet) throw new Error('Wallet not initialized');
+  if (!clobClient) throw new Error('ClobClient not initialized');
+  const creds = await clobClient.createOrDeriveApiKey();
+  console.log('\n===== SAVE THESE IN YOUR .env =====');
+  console.log('POLY_API_KEY=' + creds.key);
+  console.log('POLY_API_SECRET=' + creds.secret);
+  console.log('POLY_API_PASSPHRASE=' + creds.passphrase);
+  console.log('====================================\n');
+  return creds;
+}
 
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const nonce = 0;
+async function deriveApiKey() { return generateApiKey(); }
 
-  const domain = { name: 'ClobAuthDomain', version: '1', chainId: 137 };
-  const types = {
-    ClobAuth: [
-      { name: 'address', type: 'address' },
-      { name: 'timestamp', type: 'string' },
-      { name: 'nonce', type: 'uint256' },
-      { name: 'message', type: 'string' },
-    ],
-  };
-  const value = {
-    address: wallet.address,
-    timestamp,
-    nonce,
-    message: 'This message attests that I control the given wallet',
-  };
+// ─────────────────────────────────────────
+// TICK SIZE
+// ─────────────────────────────────────────
 
-  const signature = await wallet.signTypedData(domain, types, value);
-
+async function getTickSize(tokenId) {
   try {
-    const res = await axios.post(
-      `${CLOB_BASE}/auth/api-key`,
-      {},
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'POLY_ADDRESS': wallet.address,
-          'POLY_SIGNATURE': signature,
-          'POLY_TIMESTAMP': timestamp,
-          'POLY_NONCE': nonce.toString(),
-        },
-      }
-    );
-
-    console.log('\n===== SAVE THESE IN YOUR .env =====');
-    console.log('POLY_API_KEY=' + res.data.apiKey);
-    console.log('POLY_API_SECRET=' + res.data.secret);
-    console.log('POLY_API_PASSPHRASE=' + res.data.passphrase);
-    console.log('====================================\n');
-
-    return res.data;
-  } catch (err) {
-    const msg = err.response?.data?.error || err.message;
-    console.error('[EXECUTOR] generateApiKey failed:', msg);
-    throw new Error(msg);
+    const res = await axios.get(`${CLOB_BASE}/tick-size?token_id=${tokenId}`, { timeout: 8000 });
+    return res.data?.minimum_tick_size || '0.01';
+  } catch {
+    return '0.01';
   }
 }
 
 // ─────────────────────────────────────────
-// DERIVE EXISTING API KEY
-// ─────────────────────────────────────────
-
-async function deriveApiKey() {
-  if (!wallet) throw new Error('Wallet not initialized');
-
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const nonce = 0;
-
-  const domain = { name: 'ClobAuthDomain', version: '1', chainId: 137 };
-  const types = {
-    ClobAuth: [
-      { name: 'address', type: 'address' },
-      { name: 'timestamp', type: 'string' },
-      { name: 'nonce', type: 'uint256' },
-      { name: 'message', type: 'string' },
-    ],
-  };
-  const value = {
-    address: wallet.address,
-    timestamp,
-    nonce,
-    message: 'This message attests that I control the given wallet',
-  };
-
-  const signature = await wallet.signTypedData(domain, types, value);
-
-  try {
-    const res = await axios.get(`${CLOB_BASE}/auth/derive-api-key`, {
-      headers: {
-        'Content-Type': 'application/json',
-        'POLY_ADDRESS': wallet.address,
-        'POLY_SIGNATURE': signature,
-        'POLY_TIMESTAMP': timestamp,
-        'POLY_NONCE': nonce.toString(),
-      },
-    });
-
-    console.log('\n===== DERIVED CREDENTIALS =====');
-    console.log('POLY_API_KEY=' + res.data.apiKey);
-    console.log('POLY_API_SECRET=' + res.data.secret);
-    console.log('POLY_API_PASSPHRASE=' + res.data.passphrase);
-    console.log('================================\n');
-
-    return res.data;
-  } catch (err) {
-    const msg = err.response?.data?.error || err.message;
-    console.error('[EXECUTOR] deriveApiKey failed:', msg);
-    throw new Error(msg);
-  }
-}
-
-// ─────────────────────────────────────────
-// BUILD SIGNED EIP-712 ORDER — V2
-// ─────────────────────────────────────────
-
-async function buildSignedOrder({
-  tokenId,
-  side,           // 0 = BUY, 1 = SELL (internal)
-  price,
-  usdcAmount,
-  shares: manualShares,
-  negRisk = false,
-}) {
-  if (!wallet) throw new Error('Wallet not initialized');
-
-  const shares = manualShares || Math.floor(usdcAmount / price);
-  const salt = Math.floor(Math.random() * 1e12);
-  const timestamp = BigInt(Date.now()); // ✅ milliseconds in V2
-
-  const verifyingContract = negRisk ? CTF_NEG_RISK_EXCHANGE_V2 : CTF_EXCHANGE_V2;
-
-  const domain = {
-    name: 'Polymarket CTF Exchange', // ✅ V2 name
-    version: '2',                       // ✅ V2 version
-    chainId: 137,
-    verifyingContract,
-  };
-
-  // ✅ V2 struct — taker / expiration / nonce / feeRateBps removed
-  const types = {
-    Order: [
-      { name: 'salt', type: 'uint256' },
-      { name: 'maker', type: 'address' },
-      { name: 'signer', type: 'address' },
-      { name: 'tokenId', type: 'uint256' },
-      { name: 'makerAmount', type: 'uint256' },
-      { name: 'takerAmount', type: 'uint256' },
-      { name: 'side', type: 'uint8' },
-      { name: 'signatureType', type: 'uint8' },
-      { name: 'timestamp', type: 'uint256' },
-      { name: 'metadata', type: 'bytes32' },
-      { name: 'builder', type: 'bytes32' },
-    ],
-  };
-
-  // BUY  (0): maker puts up USDC, taker gives shares
-  // SELL (1): maker puts up shares, taker gives USDC
-  const makerAmount = side === 0
-    ? BigInt(Math.floor(usdcAmount * 1e6))
-    : BigInt(Math.floor(shares * 1e6));
-
-  const takerAmount = side === 0
-    ? BigInt(Math.floor(shares * 1e6))
-    : BigInt(Math.floor(usdcAmount * 1e6));
-
-  const orderData = {
-    salt: BigInt(salt),
-    maker: wallet.address,
-    signer: wallet.address,
-    tokenId: BigInt(tokenId),
-    makerAmount,
-    takerAmount,
-    side,              // uint8 for EIP-712 signing
-    signatureType: 0,  // 0 = EOA
-    timestamp,
-    metadata: ZERO_BYTES32,
-    builder: ZERO_BYTES32,
-  };
-
-  const signature = await wallet.signTypedData(domain, types, orderData);
-
-  // ✅ Wire body: side is STRING "BUY"/"SELL" — NOT uint8
-  // ✅ order is wrapped inside { order: {...}, orderType: "GTC" }
-  const orderBody = {
-    salt: salt.toString(),
-    maker: wallet.address,
-    signer: wallet.address,
-    tokenId: tokenId.toString(),
-    makerAmount: makerAmount.toString(),
-    takerAmount: takerAmount.toString(),
-    side: side === 0 ? 'BUY' : 'SELL', // ✅ string, not int
-    signatureType: 0,
-    timestamp: timestamp.toString(),
-    metadata: ZERO_BYTES32,
-    builder: ZERO_BYTES32,
-    signature,
-  };
-
-  return orderBody;
-}
-
-// ─────────────────────────────────────────
-// SUBMIT ORDER
-// ✅ V2: body = { order: {...}, orderType: "GTC" }
-// ─────────────────────────────────────────
-
-async function submitOrder(signedOrder, orderType = 'GTC') {
-  const path = '/order';
-  // ✅ wrap order properly
-  const payload = { order: signedOrder, orderType };
-  const body = JSON.stringify(payload);
-
-  try {
-    const headers = await buildClobAuthHeaders('POST', path, body);
-    const res = await axios.post(`${CLOB_BASE}${path}`, body, { headers });
-    return { success: true, data: res.data };
-  } catch (err) {
-    const msg = err.response?.data?.error || err.message;
-    console.error('[EXECUTOR] submitOrder failed:', msg);
-    return { success: false, error: msg };
-  }
-}
-
-// ─────────────────────────────────────────
-// CANCEL SINGLE ORDER
-// ─────────────────────────────────────────
-
-async function cancelOrder(orderId) {
-  const path = `/order/${orderId}`;
-  try {
-    const headers = await buildClobAuthHeaders('DELETE', path);
-    const res = await axios.delete(`${CLOB_BASE}${path}`, { headers });
-    return { success: true, data: res.data };
-  } catch (err) {
-    const msg = err.response?.data?.error || err.message;
-    console.error('[EXECUTOR] cancelOrder failed:', msg);
-    return { success: false, error: msg };
-  }
-}
-
-// ─────────────────────────────────────────
-// CANCEL ALL ORDERS
-// ─────────────────────────────────────────
-
-async function cancelAllOrders() {
-  const path = '/orders';
-  try {
-    const headers = await buildClobAuthHeaders('DELETE', path);
-    const res = await axios.delete(`${CLOB_BASE}${path}`, { headers });
-    return { success: true, data: res.data };
-  } catch (err) {
-    const msg = err.response?.data?.error || err.message;
-    console.error('[EXECUTOR] cancelAllOrders failed:', msg);
-    return { success: false, error: msg };
-  }
-}
-
-// ─────────────────────────────────────────
-// GET OPEN ORDERS
-// ─────────────────────────────────────────
-
-async function getOpenOrders(tokenId = null) {
-  const path = tokenId ? `/orders?token_id=${tokenId}` : '/orders';
-  try {
-    const headers = await buildClobAuthHeaders('GET', path);
-    const res = await axios.get(`${CLOB_BASE}${path}`, { headers });
-    return { success: true, orders: res.data };
-  } catch (err) {
-    const msg = err.response?.data?.error || err.message;
-    console.error('[EXECUTOR] getOpenOrders failed:', msg);
-    return { success: false, error: msg };
-  }
-}
-
-// ─────────────────────────────────────────
-// GET BEST PRICE FROM ORDERBOOK
-// ✅ V2 uses token_id (underscore), not tokenID
+// BEST PRICE FROM ORDERBOOK
 // ─────────────────────────────────────────
 
 async function getBestPrice(tokenId, side = 'BUY') {
   try {
-    // ✅ correct param name: token_id
-    const res = await axios.get(`${CLOB_BASE}/book?token_id=${tokenId}`);
+    const res = await axios.get(`${CLOB_BASE}/book?token_id=${tokenId}`, { timeout: 8000 });
     const book = res.data;
-
     if (side === 'BUY') {
       const asks = book.asks || [];
-      if (!asks.length) return null;
-      return parseFloat(asks[0].price);
-    } else {
-      const bids = book.bids || [];
-      if (!bids.length) return null;
-      return parseFloat(bids[0].price);
+      return asks.length ? parseFloat(asks[0].price) : null;
     }
+    const bids = book.bids || [];
+    return bids.length ? parseFloat(bids[0].price) : null;
   } catch (err) {
-    console.error('[CLOB] getBestPrice error:', err.response?.status, err.message);
+    console.error('[EXECUTOR] getBestPrice error:', err.message);
     return null;
   }
 }
 
 // ─────────────────────────────────────────
-// MAIN COPY TRADE EXECUTOR
+// MAIN COPY TRADE
 // ─────────────────────────────────────────
 
-async function executeCopyTrade({
-  tokenId,
-  side,
-  price,
-  usdcAmount,
-  shares: manualShares,
-  negRisk = false,
-}) {
-  if (!wallet) {
-    return { success: false, error: 'Wallet not configured. Set PRIVATE_KEY in .env' };
-  }
+async function executeCopyTrade({ tokenId, side, price, usdcAmount, shares: manualShares, negRisk = false }) {
+  if (!clobClient) return { success: false, error: 'ClobClient not initialized' };
 
-  const shares = manualShares || Math.floor(usdcAmount / price);
-  const finalUsdc = manualShares ? manualShares * price : usdcAmount;
   const maxSize = parseFloat(process.env.MAX_AUTO_TRADE_USDC || 100);
-  const safeUsdc = side === 0 ? Math.min(finalUsdc, maxSize) : finalUsdc;
+  const safeUsdc = side === 0 ? Math.min(usdcAmount, maxSize) : usdcAmount;
+  const size = manualShares || parseFloat((safeUsdc / price).toFixed(2));
+  const sdkSide = side === 0 ? Side.BUY : Side.SELL;
 
-  console.log(
-    `[EXECUTOR] Executing: tokenId=${tokenId} ` +
-    `side=${side === 0 ? 'BUY' : 'SELL'} ` +
-    `price=${price} shares=${shares} usdc=${safeUsdc} negRisk=${negRisk}`
-  );
+  console.log(`[EXECUTOR] ${sdkSide} tokenId=${tokenId.slice(0, 20)}... price=${price} size=${size} usdc=${safeUsdc}`);
 
   try {
-    const signedOrder = await buildSignedOrder({
-      tokenId,
-      side,
-      price,
-      usdcAmount: safeUsdc,
-      shares: manualShares,
-      negRisk,
-    });
+    const tickSize = await getTickSize(tokenId);
+    console.log(`[EXECUTOR] tickSize=${tickSize}`);
 
-    const result = await submitOrder(signedOrder, 'GTC');
+    const resp = await clobClient.createAndPostOrder(
+      { tokenID: tokenId, price, size, side: sdkSide, negRisk },
+      { tickSize, negRisk },
+      OrderType.GTC
+    );
 
-    if (result.success) {
-      console.log(`[EXECUTOR] ✅ Order submitted:`, result.data);
-    } else {
-      console.error(`[EXECUTOR] ❌ Order failed:`, result.error);
-    }
-
-    return result;
+    console.log(`[EXECUTOR] ✅ Order submitted:`, JSON.stringify(resp));
+    return { success: true, data: resp };
   } catch (err) {
-    console.error('[EXECUTOR] executeCopyTrade error:', err.message);
-    return { success: false, error: err.message };
+    const msg = err?.message || String(err);
+    console.error('[EXECUTOR] ❌ Failed:', msg);
+    return { success: false, error: msg };
   }
 }
 
 // ─────────────────────────────────────────
-// WALLET pUSD BALANCE
+// CANCEL
+// ─────────────────────────────────────────
+
+async function cancelOrder(orderId) {
+  try { return { success: true, data: await clobClient.cancelOrder({ orderID: orderId }) }; }
+  catch (err) { return { success: false, error: err.message }; }
+}
+
+async function cancelAllOrders() {
+  try { return { success: true, data: await clobClient.cancelAll() }; }
+  catch (err) { return { success: false, error: err.message }; }
+}
+
+async function getOpenOrders(tokenId = null) {
+  try {
+    const params = tokenId ? { asset_id: tokenId } : {};
+    return { success: true, orders: await clobClient.getOrders(params) };
+  } catch (err) { return { success: false, error: err.message }; }
+}
+
+// ─────────────────────────────────────────
+// GEOBLOCK CHECK
+// ─────────────────────────────────────────
+
+async function checkGeoblock() {
+  try {
+    const res = await axios.get('https://polymarket.com/api/geoblock', { timeout: 8000 });
+    const { blocked, ip, country } = res.data;
+    console.log(`[GEOBLOCK] IP: ${ip} | Country: ${country} | Blocked: ${blocked}`);
+    return res.data;
+  } catch (err) {
+    console.error('[GEOBLOCK] Check failed:', err.message);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────
+// BALANCE
 // ─────────────────────────────────────────
 
 async function getWalletBalance() {
-  if (!wallet) return null;
+  if (!ethersWallet) return null;
   try {
-    const abi = ['function balanceOf(address) view returns (uint256)'];
-    const pusd = new ethers.Contract(PUSD_ADDRESS, abi, provider);
-    const bal = await pusd.balanceOf(wallet.address);
-    return {
-      address: wallet.address,
-      pusd: (Number(bal) / 1e6).toFixed(2),
-    };
-  } catch (err) {
-    console.error('[EXECUTOR] getWalletBalance error:', err.message);
-    return { address: wallet.address, pusd: '0.00' };
-  }
+    const pusd = new ethers.Contract(PUSD_ADDRESS, ['function balanceOf(address) view returns (uint256)'], provider);
+    const bal = await pusd.balanceOf(ethersWallet.address);
+    return { address: ethersWallet.address, pusd: (Number(bal) / 1e6).toFixed(2) };
+  } catch { return { address: ethersWallet?.address, pusd: '0.00' }; }
 }
 
-// ─────────────────────────────────────────
-// SHARE BALANCE FOR A TOKEN
-// ─────────────────────────────────────────
-
 async function getContractBalance(tokenId) {
-  if (!wallet) return 0;
+  if (!ethersWallet) return 0;
   try {
-    const abi = ['function balanceOf(address, uint256) view returns (uint256)'];
-    const ctf = new ethers.Contract(CTF_CONTRACT, abi, provider);
-    const bal = await ctf.balanceOf(wallet.address, BigInt(tokenId));
-    return Number(bal) / 1e6;
-  } catch (err) {
-    console.error('[EXECUTOR] getContractBalance error:', err.message);
-    return 0;
-  }
+    const ctf = new ethers.Contract(CTF_CONTRACT, ['function balanceOf(address, uint256) view returns (uint256)'], provider);
+    return Number(await ctf.balanceOf(ethersWallet.address, BigInt(tokenId))) / 1e6;
+  } catch { return 0; }
 }
 
 // ─────────────────────────────────────────
 // BOOT
 // ─────────────────────────────────────────
 
-initWallet();
+initWallet()
+  .then(async () => {
+    const geo = await checkGeoblock();
+    if (geo?.blocked) console.error('[GEOBLOCK] ⚠️ BLOCKED — change Railway region to US!');
+    else if (geo) console.log('[GEOBLOCK] ✅ Not blocked — trading enabled');
+  })
+  .catch(err => console.error('[EXECUTOR] Boot error:', err.message));
 
 module.exports = {
-  executeCopyTrade,
-  getWalletBalance,
-  getContractBalance,
-  getBestPrice,
-  cancelOrder,
-  cancelAllOrders,
-  getOpenOrders,
-  generateApiKey,
-  deriveApiKey,
-  initWallet,
+  initWallet, executeCopyTrade, getWalletBalance, getContractBalance,
+  getBestPrice, cancelOrder, cancelAllOrders, getOpenOrders,
+  generateApiKey, deriveApiKey, checkGeoblock,
 };
