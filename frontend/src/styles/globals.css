@@ -1,0 +1,24 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: #0a0a0f;
+  color: #e2e8f0;
+  font-family: 'Courier New', monospace;
+  overflow: hidden;
+}
+
+#__next { height: 100%; }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2a3e; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a4e; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+button { cursor: pointer; }
+input, textarea { outline: none; }

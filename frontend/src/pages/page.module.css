@@ -1,0 +1,155 @@
+/* page.module.css */
+.app {
+  min-height: 100vh;
+  background: #0a0a0f;
+  color: #e2e8f0;
+  font-family: 'Courier New', monospace;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  border-bottom: 1px solid #2a2a3e;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #0d0d1a;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo {
+  font-size: 16px;
+  font-weight: bold;
+  letter-spacing: 4px;
+  color: #00ff88;
+}
+.logo span { color: #6b7280; }
+
+.tagline {
+  font-size: 9px;
+  color: #6b7280;
+  letter-spacing: 3px;
+  margin-top: 2px;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.balancePill {
+  font-size: 11px;
+  color: #ffcc44;
+  border: 1px solid rgba(255,204,68,0.3);
+  padding: 6px 14px;
+  background: rgba(255,204,68,0.05);
+}
+
+.connectBtn {
+  background: transparent;
+  border: 1px solid #00ff88;
+  color: #00ff88;
+  padding: 8px 16px;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.connectBtn:hover { background: #00ff88; color: #000; }
+.connectBtn.connected { border-color: #ffcc44; color: #ffcc44; font-size: 10px; }
+
+.main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  height: calc(100vh - 53px);
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.emptyState {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  font-size: 12px;
+  letter-spacing: 2px;
+  line-height: 2.5;
+}
+
+.emptyIcon {
+  font-size: 40px;
+  opacity: 0.2;
+  margin-bottom: 16px;
+}
+
+.emptyHint {
+  font-size: 10px;
+  color: #4b5563;
+  letter-spacing: 1px;
+  text-align: center;
+  max-width: 300px;
+}
+
+.tabBar {
+  display: flex;
+  border-bottom: 1px solid #2a2a3e;
+  background: #111122;
+}
+
+.tab {
+  padding: 10px 20px;
+  font-size: 9px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  color: #6b7280;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  transition: all 0.15s;
+  font-family: 'Courier New', monospace;
+}
+.tab:hover { color: #e2e8f0; }
+.tabActive { color: #00ff88 !important; border-bottom-color: #00ff88 !important; }
+
+/* Copy Log */
+.copyLog { padding: 0; }
+.logEntry {
+  display: grid;
+  grid-template-columns: 80px 1fr 60px 80px 30px 80px;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #2a2a3e;
+  font-size: 10px;
+  align-items: center;
+}
+.logSuccess { border-left: 2px solid #00ff88; }
+.logFail { border-left: 2px solid #ff4466; }
+.logBadge {
+  font-size: 8px;
+  letter-spacing: 1px;
+  padding: 2px 6px;
+  background: rgba(68,136,255,0.1);
+  color: #4488ff;
+  border: 1px solid rgba(68,136,255,0.3);
+  white-space: nowrap;
+}
+.logMarket { color: #a0aec0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.logSide { color: #e2e8f0; }
+.logAmount { color: #ffcc44; }
+.logStatus { font-size: 14px; }
+.logTime { color: #6b7280; }

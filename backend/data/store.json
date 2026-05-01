@@ -1,0 +1,147 @@
+{
+  "trackedTraders": [
+    [
+      "0x4931d4a15a2c4222545c4fdc3051b901d5974573",
+      {
+        "address": "0x4931d4a15a2c4222545c4fdc3051b901d5974573",
+        "label": "0x4931d4",
+        "addedAt": "2026-05-01T13:03:30.778Z",
+        "active": true,
+        "copySettings": {
+          "enabled": true,
+          "mode": "fixed",
+          "value": 1
+        }
+      }
+    ]
+  ],
+  "copyTradeLog": [
+    {
+      "id": "1777654803382",
+      "timestamp": "2026-05-01T17:00:03.382Z",
+      "type": "auto",
+      "traderAddress": "0x4931d4a15a2c4222545c4fdc3051b901d5974573",
+      "market": "Bitcoin Up or Down - May 1, 1:05PM-1:10PM ET",
+      "tokenId": "68417799252972263402421660123768996492723880871690841274328835169865587791522",
+      "outcome": "Up",
+      "price": 0.5,
+      "usdcAmount": 1,
+      "side": "BUY",
+      "success": false,
+      "error": "Hostname/IP does not match certificate's altnames: Host: clob.polymarket.com. is not in the cert's altnames: DNS:domain.block.excitel.in",
+      "orderId": null
+    },
+    {
+      "id": "1777654128815",
+      "timestamp": "2026-05-01T16:48:48.816Z",
+      "type": "auto",
+      "traderAddress": "0x4931d4a15a2c4222545c4fdc3051b901d5974573",
+      "market": "Bitcoin Up or Down - May 1, 12:55PM-1:00PM ET",
+      "tokenId": "98359826738886476868325741623370418383858218402931938478009243743585941497460",
+      "outcome": "Down",
+      "price": 0.49,
+      "usdcAmount": 1,
+      "side": "BUY",
+      "success": false,
+      "error": "order_version_mismatch",
+      "orderId": null
+    },
+    {
+      "id": "1777652891796",
+      "timestamp": "2026-05-01T16:28:11.796Z",
+      "type": "auto",
+      "traderAddress": "0x4931d4a15a2c4222545c4fdc3051b901d5974573",
+      "market": "Bitcoin Up or Down - May 1, 12:35PM-12:40PM ET",
+      "tokenId": "73187658263141921030443983330610383495954708177957773485601370695007716506322",
+      "outcome": "Up",
+      "price": 0.5,
+      "usdcAmount": 1,
+      "side": "BUY",
+      "success": false,
+      "error": "order_version_mismatch",
+      "orderId": null
+    },
+    {
+      "id": "1777640889677",
+      "timestamp": "2026-05-01T13:08:09.677Z",
+      "type": "auto",
+      "traderAddress": "0x4931d4a15a2c4222545c4fdc3051b901d5974573",
+      "market": "Bitcoin Up or Down - May 1, 9:15AM-9:20AM ET",
+      "tokenId": "42117002923392023708412335002834983499721561962586007366886563207495862763538",
+      "outcome": "Up",
+      "price": 0.48,
+      "usdcAmount": 1,
+      "side": "BUY",
+      "success": false,
+      "error": "Unauthorized/Invalid api key",
+      "orderId": null
+    },
+    {
+      "id": "1777640280417",
+      "timestamp": "2026-05-01T12:58:00.417Z",
+      "type": "auto",
+      "traderAddress": "0x4931d4a15a2c4222545c4fdc3051b901d5974573",
+      "market": "Bitcoin Up or Down - May 1, 9:00AM-9:05AM ET",
+      "tokenId": "73643214042551964846644195165001015005563785514178450841208348461891118932293",
+      "outcome": "Up",
+      "price": 0.48,
+      "usdcAmount": 1,
+      "side": "BUY",
+      "success": false,
+      "error": "Unauthorized/Invalid api key",
+      "orderId": null
+    },
+    {
+      "id": "1777639707302",
+      "timestamp": "2026-05-01T12:48:27.303Z",
+      "type": "auto",
+      "traderAddress": "0x4931d4a15a2c4222545c4fdc3051b901d5974573",
+      "market": "Bitcoin Up or Down - May 1, 8:45AM-8:50AM ET",
+      "tokenId": "61865696475640993511520763365269908144251719930328047360870561014910890204331",
+      "outcome": "Down",
+      "price": 0.1,
+      "usdcAmount": 1,
+      "side": "BUY",
+      "success": false,
+      "error": "Unauthorized/Invalid api key",
+      "orderId": null
+    },
+    {
+      "id": "1777636402271",
+      "timestamp": "2026-05-01T11:53:22.271Z",
+      "type": "auto",
+      "traderAddress": "0xa235ff7a18c69fc7a20b915654329e81a230c714",
+      "market": "Bitcoin Up or Down - May 1, 7:50AM-7:55AM ET",
+      "tokenId": "53392099877378667250573134623529963722866046983627692957252791357908893127416",
+      "outcome": "Down",
+      "price": 0.05,
+      "usdcAmount": 1,
+      "side": "BUY",
+      "success": false,
+      "error": "Unauthorized/Invalid api key",
+      "orderId": null
+    },
+    {
+      "id": "1777636131553",
+      "timestamp": "2026-05-01T11:48:51.553Z",
+      "type": "auto",
+      "traderAddress": "0xa235ff7a18c69fc7a20b915654329e81a230c714",
+      "market": "Bitcoin Up or Down - May 1, 7:45AM-7:50AM ET",
+      "tokenId": "33536806803969483265291565131363503557727326246088695899655453037965794419714",
+      "outcome": "Up",
+      "price": 0.08,
+      "usdcAmount": 1,
+      "side": "BUY",
+      "success": false,
+      "error": "Unauthorized/Invalid api key",
+      "orderId": null
+    }
+  ],
+  "settings": {
+    "autoCopyEnabled": false,
+    "maxTradeUSDC": 50,
+    "minConfidence": 0.55,
+    "copyPartialClose": true,
+    "trackedAddresses": []
+  }
+}
