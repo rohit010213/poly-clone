@@ -11,6 +11,7 @@ const tradesRoutes = require('./routes/trades');
 const walletRoutes = require('./routes/wallet');
 const { startPoller } = require('./services/poller');
 const { initWS } = require('./services/websocket');
+const { initWallet, checkGeoblock } = require('./services/executor');
 
 const app = express();
 const server = createServer(app);
@@ -38,12 +39,36 @@ app.get('/api/health', (req, res) => {
 // Init WebSocket broadcasts
 initWS(wss);
 
-// Start background poller
-startPoller(wss);
-
 const PORT = process.env.PORT || 4000;
-server.listen(PORT, () => {
-  console.log(`\n🟢 PolyClone Backend running on port ${PORT}`);
-  console.log(`📡 WebSocket ready`);
-  console.log(`🔍 Polling every ${process.env.POLL_INTERVAL || 30}s\n`);
+
+// ── Boot sequence — wallet init pehle, phir server start ──
+async function boot() {
+  console.log('\n🔧 Initializing wallet + SDK...');
+
+  const walletOk = await initWallet();
+  if (!walletOk) {
+    console.error('❌ Wallet init failed — check PRIVATE_KEY in .env');
+  } else {
+    console.log('✅ Wallet + ClobClient ready');
+  }
+
+  // Geoblock check
+  const geo = await checkGeoblock();
+  if (geo?.blocked) {
+    console.error('⚠️  GEOBLOCK: Trading restricted from this region!');
+  }
+
+  // Start poller AFTER wallet is ready
+  startPoller(wss);
+
+  server.listen(PORT, () => {
+    console.log(`\n🟢 PolyClone Backend running on port ${PORT}`);
+    console.log(`📡 WebSocket ready`);
+    console.log(`🔍 Polling every ${process.env.POLL_INTERVAL || 30}s\n`);
+  });
+}
+
+boot().catch(err => {
+  console.error('❌ Boot failed:', err.message);
+  process.exit(1);
 });
