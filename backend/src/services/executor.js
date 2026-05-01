@@ -51,7 +51,8 @@ async function initWallet() {
 
   const pk = process.env.PRIVATE_KEY.startsWith('0x') ? process.env.PRIVATE_KEY : '0x' + process.env.PRIVATE_KEY;
   const account = privateKeyToAccount(pk);
-  const signer = createWalletClient({ account, transport: http() });
+  const rpcUrl = process.env.POLYGON_RPC || 'https://polygon-rpc.com';
+  const signer = createWalletClient({ account, transport: http(rpcUrl) });
 
   const sdkConfig = {
     host: CLOB_BASE,
