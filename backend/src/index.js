@@ -38,11 +38,29 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/generate-key', async (req, res) => {
   try {
-    const { generateApiKey } = require('./services/executor');
-    const creds = await generateApiKey();
-    res.json(creds);
+    const { ClobClient, Chain } = await import('@polymarket/clob-client-v2');
+    const { createWalletClient, http } = await import('viem');
+    const { privateKeyToAccount } = await import('viem/accounts');
+
+    const pk = process.env.PRIVATE_KEY;
+    const account = privateKeyToAccount(pk.startsWith('0x') ? pk : '0x' + pk);
+    const signer = createWalletClient({
+      account,
+      transport: http(process.env.POLYGON_RPC || 'https://polygon-rpc.com'),
+    });
+
+    const client = new ClobClient({
+      host: process.env.CLOB_API_URL || 'https://clob.polymarket.com',
+      chain: Chain.POLYGON,
+      signer,
+      signatureType: 0,
+    });
+
+    const creds = await client.createOrDeriveApiKey();
+    // Raw response bhej — exact fields dikhenge
+    res.json({ raw: creds, keys: Object.keys(creds || {}) });
   } catch (err) {
-    res.json({ error: err.message });
+    res.json({ error: err.message, stack: err.stack });
   }
 });
 
