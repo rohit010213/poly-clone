@@ -17,6 +17,21 @@
   ],
   "copyTradeLog": [
     {
+      "id": "1777660853263",
+      "timestamp": "2026-05-01T18:40:53.263Z",
+      "type": "auto",
+      "traderAddress": "0x4931d4a15a2c4222545c4fdc3051b901d5974573",
+      "market": "Bitcoin Up or Down - May 1, 2:45PM-2:50PM ET",
+      "tokenId": "39320554101872108605987984185671633835700180444742796093621417989350603137284",
+      "outcome": "Up",
+      "price": 0.5,
+      "usdcAmount": 1,
+      "side": "BUY",
+      "success": true,
+      "error": null,
+      "orderId": null
+    },
+    {
       "id": "1777654803382",
       "timestamp": "2026-05-01T17:00:03.382Z",
       "type": "auto",

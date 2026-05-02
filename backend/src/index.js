@@ -36,6 +36,16 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
+app.get('/api/generate-key', async (req, res) => {
+  try {
+    const { generateApiKey } = require('./services/executor');
+    const creds = await generateApiKey();
+    res.json(creds);
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
 // Init WebSocket broadcasts
 initWS(wss);
 
