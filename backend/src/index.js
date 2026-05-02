@@ -50,20 +50,30 @@ app.get('/api/generate-key', async (req, res) => {
     });
 
     const client = new ClobClient({
-      host: process.env.CLOB_API_URL || 'https://clob.polymarket.com',
+      host: 'https://clob.polymarket.com',
       chain: Chain.POLYGON,
       signer,
-      signatureType: 0,
+      signatureType: parseInt(process.env.POLY_SIGNATURE_TYPE || '2'),
+      funderAddress: process.env.POLY_FUNDER_ADDRESS,
     });
 
+    console.log('Calling createOrDeriveApiKey...');
     const creds = await client.createOrDeriveApiKey();
+    console.log('Raw creds:', JSON.stringify(creds));
+    console.log('Creds keys:', Object.keys(creds || {}));
+    console.log('key value:', creds.key);
+    console.log('secret value:', creds.secret);
+    console.log('passphrase value:', creds.passphrase);
+
     res.json({
       POLY_API_KEY: creds.key,
       POLY_API_SECRET: creds.secret,
       POLY_API_PASSPHRASE: creds.passphrase,
+      _raw: creds,
     });
   } catch (err) {
-    res.json({ error: err.message });
+    console.error('GENERATE KEY ERROR:', err);
+    res.json({ error: err.message, stack: err.stack });
   }
 });
 
