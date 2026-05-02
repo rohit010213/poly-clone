@@ -57,10 +57,13 @@ app.get('/api/generate-key', async (req, res) => {
     });
 
     const creds = await client.createOrDeriveApiKey();
-    // Raw response bhej — exact fields dikhenge
-    res.json({ raw: creds, keys: Object.keys(creds || {}) });
+    res.json({
+      POLY_API_KEY: creds.key,
+      POLY_API_SECRET: creds.secret,
+      POLY_API_PASSPHRASE: creds.passphrase,
+    });
   } catch (err) {
-    res.json({ error: err.message, stack: err.stack });
+    res.json({ error: err.message });
   }
 });
 
